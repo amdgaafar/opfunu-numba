@@ -5,7 +5,7 @@
 # --------------------------------------------------%
 
 import numpy as np
-
+from numba import njit
 
 def rounder(x, condition):
     temp_2x = 2 * x
@@ -16,32 +16,37 @@ def rounder(x, condition):
     return np.where(condition < 0.5, x, temp_2x / 2)
 
 
+@njit
 def griewank_func(x):
-    x = np.array(x).ravel()
+    x = x.ravel()
     idx = np.arange(1, len(x) + 1)
     t1 = np.sum(x ** 2) / 4000
     t2 = np.prod(np.cos(x / np.sqrt(idx)))
     return t1 - t2 + 1
 
 
+@njit
 def rosenbrock_func(x, shift=0.0):
-    x = np.array(x).ravel() + shift
+    x = x.ravel() + shift
     term1 = 100 * (x[:-1] ** 2 - x[1:]) ** 2
     term2 = (x[:-1] - 1) ** 2
     return np.sum(term1 + term2)
 
+@njit
 def scaffer_func(x):
-    x = np.array(x).ravel()
+    x = x.ravel()
     return 0.5 + (np.sin(np.sqrt(np.sum(x ** 2))) ** 2 - 0.5) / (1 + 0.001 * np.sum(x ** 2)) ** 2
 
 
+@njit
 def rastrigin_func(x):
-    x = np.array(x).ravel()
+    x = x.ravel()
     return np.sum(x ** 2 - 10 * np.cos(2 * np.pi * x) + 10)
 
 
+@njit
 def weierstrass_func(x, a=0.5, b=3., k_max=20):
-    x = np.array(x).ravel()
+    x = x.ravel()
     ndim = len(x)
     k = np.arange(0, k_max + 1)
     result = 0
@@ -50,6 +55,7 @@ def weierstrass_func(x, a=0.5, b=3., k_max=20):
     return result - ndim * np.sum(a ** k * np.cos(np.pi * b ** k))
 
 
+@njit
 def weierstrass_norm_func(x, a=0.5, b=3., k_max=20):
     """
     This function matches CEC2005 description of F11 except for addition of the bias and follows the C implementation
@@ -57,21 +63,24 @@ def weierstrass_norm_func(x, a=0.5, b=3., k_max=20):
     return weierstrass_func(x, a, b, k_max) - weierstrass_func(np.zeros(len(x)), a, b, k_max)
 
 
+@njit
 def ackley_func(x):
-    x = np.array(x).ravel()
+    x = x.ravel()
     ndim = len(x)
     t1 = np.sum(x ** 2)
     t2 = np.sum(np.cos(2 * np.pi * x))
     return -20 * np.exp(-0.2 * np.sqrt(t1 / ndim)) - np.exp(t2 / ndim) + 20 + np.e
 
 
+@njit
 def sphere_func(x):
-    x = np.array(x).ravel()
+    x = x.ravel()
     return np.sum(x ** 2)
 
 
+@njit
 def rotated_expanded_schaffer_func(x):
-    x = np.asarray(x).ravel()
+    x = x.ravel()
     x_pairs = np.column_stack((x, np.roll(x, -1)))
     sum_sq = x_pairs[:, 0] ** 2 + x_pairs[:, 1] ** 2
     # Calculate the Schaffer function for all pairs simultaneously
@@ -80,15 +89,21 @@ def rotated_expanded_schaffer_func(x):
     return np.sum(schaffer_values)
 
 
+# why no numpy array?
+@njit
 def rotated_expanded_scaffer_func(x):
-    x = np.array(x).ravel()
-    results = [scaffer_func([x[idx], x[idx + 1]]) for idx in range(0, len(x) - 1)]
-    return np.sum(results) + scaffer_func([x[-1], x[0]])
+    x = x.ravel()
+    # results = [scaffer_func([x[idx], x[idx + 1]]) for idx in range(0, len(x) - 1)]
+    results = np.zeros(len(x) - 1)
+    for idx in range(0, len(x) - 1):
+        results[idx] = scaffer_func(np.array([x[idx], x[idx + 1]]))
+        
+    return np.sum(results) + scaffer_func(np.array([x[-1], x[0]]))
 
-
+@njit
 def grie_rosen_cec_func(x):
     """This is based on the CEC version which unrolls the griewank and rosenbrock functions for better performance"""
-    z = np.array(x).ravel()
+    z = x.ravel()
     z += 1.0  # This centers the optimal solution of rosenbrock to 0
 
     tmp1 = (z[:-1] * z[:-1] - z[1:]) ** 2
@@ -104,45 +119,59 @@ def grie_rosen_cec_func(x):
     return f
 
 
+# why no numpy array?
+@njit
 def f8f2_func(x):
-    x = np.array(x).ravel()
-    results = [griewank_func(rosenbrock_func([x[idx], x[idx + 1]])) for idx in range(0, len(x) - 1)]
-    return np.sum(results) + griewank_func(rosenbrock_func([x[-1], x[0]]))
+    x = x.ravel()
+    # results = [griewank_func(rosenbrock_func([x[idx], x[idx + 1]])) for idx in range(0, len(x) - 1)]
+    results = np.zeros(len(x) - 1)
+    for idx in range(0, len(x) - 1):
+        results[idx] = griewank_func(rosenbrock_func(np.array([x[idx], x[idx + 1]])))
+    return np.sum(results) + griewank_func(rosenbrock_func(np.array([x[-1], x[0]])))
 
-
+# why no numpy array?
+@njit
 def non_continuous_expanded_scaffer_func(x):
-    x = np.array(x).ravel()
+    x = x.ravel()
     y = rounder(x, np.abs(x))
-    results = [scaffer_func([y[idx], y[idx + 1]]) for idx in range(0, len(x) - 1)]
-    return np.sum(results) + scaffer_func([y[-1], y[0]])
+    # results = [scaffer_func([y[idx], y[idx + 1]]) for idx in range(0, len(x) - 1)]
+    results = np.zeros(len(x) - 1)
+    for idx in range(0, len(x) - 1):
+        results[idx] = scaffer_func(np.array([y[idx], y[idx + 1]]))
+    return np.sum(results) + scaffer_func(np.array([y[-1], y[0]]))
 
 
+@njit
 def non_continuous_rastrigin_func(x):
-    x = np.array(x).ravel()
+    x = x.ravel()
     y = rounder(x, np.abs(x))
     shifted_y = np.roll(y, -1)
     results = rastrigin_func(np.column_stack((y, shifted_y)))
     return np.sum(results)
 
 
+@njit
 def elliptic_func(x):
-    x = np.array(x).ravel()
+    x = x.ravel()
     ndim = len(x)
     idx = np.arange(0, ndim)
     return np.sum(10 ** (6.0 * idx / (ndim - 1)) * x ** 2)
 
 
 
+@njit
 def sphere_noise_func(x):
-    x = np.array(x).ravel()
+    x = x.ravel()
     return np.sum(x ** 2) * (1 + 0.1 * np.abs(np.random.normal(0, 1)))
 
 
+@njit
 def twist_func(x):
     # This function in CEC-2008 F7
     return 4 * (x ** 4 - 2 * x ** 3 + x ** 2)
 
 
+@njit
 def doubledip(x, c, s):
     # This function in CEC-2008 F7
     if -0.5 < x < 0.5:
@@ -151,6 +180,7 @@ def doubledip(x, c, s):
         return 0
 
 
+# @njit # SKIP
 def fractal_1d_func(x):
     # This function in CEC-2008 F7
     np.random.seed(0)
@@ -165,32 +195,39 @@ def fractal_1d_func(x):
     return result1
 
 
+@njit
 def schwefel_12_func(x):
-    x = np.array(x).ravel()
+    x = x.ravel()
     ndim = len(x)
-    return np.sum([np.sum(x[:idx]) ** 2 for idx in range(0, ndim)])
+    # return np.sum([np.sum(x[:idx]) ** 2 for idx in range(0, ndim)])
+    result = 0.0
+    for idx in range(0, ndim):
+        result += np.sum(x[:idx]) ** 2
+    return result
 
+@njit
+def transform(xi):
+    if xi > 0:
+        c1, c2, x_sign = 10., 7.9, 1.0
+        x_star = np.log(np.abs(xi))
+    elif xi == 0:
+        c1, c2, x_sign, x_star = 5.5, 3.1, 0., 0.
+    else:
+        c1, c2, x_sign = 5.5, 3.1, -1.
+        x_star = np.log(np.abs(xi))
+    return x_sign * np.exp(x_star + 0.049 * (np.sin(c1 * x_star) + np.sin(c2 * x_star)))
 
+@njit
 def tosz_func(x):
-    def transform(xi):
-        if xi > 0:
-            c1, c2, x_sign = 10., 7.9, 1.0
-            x_star = np.log(np.abs(xi))
-        elif xi == 0:
-            c1, c2, x_sign, x_star = 5.5, 3.1, 0., 0.
-        else:
-            c1, c2, x_sign = 5.5, 3.1, -1.
-            x_star = np.log(np.abs(xi))
-        return x_sign * np.exp(x_star + 0.049 * (np.sin(c1 * x_star) + np.sin(c2 * x_star)))
-
-    x = np.array(x).ravel()
+    x = x.ravel()
     x[0] = transform(x[0])
     x[-1] = transform(x[-1])
     return x
 
 
+@njit
 def tasy_func(x, beta=0.5):
-    x = np.array(x).ravel()
+    x = x.ravel()
     ndim = len(x)
     idx = np.arange(0, ndim)
     up = 1 + beta * ((idx - 1) / (ndim - 1)) * np.sqrt(np.abs(x))
@@ -198,24 +235,28 @@ def tasy_func(x, beta=0.5):
     return np.where(x > 0, x_temp, x)
 
 
+@njit
 def bent_cigar_func(x):
-    x = np.array(x).ravel()
+    x = x.ravel()
     return x[0] ** 2 + 10 ** 6 * np.sum(x[1:] ** 2)
 
 
+@njit
 def discus_func(x):
-    x = np.array(x).ravel()
+    x = x.ravel()
     return 1e6 * x[0] ** 2 + np.sum(x[1:] ** 2)
 
 
+@njit
 def different_powers_func(x):
-    x = np.array(x).ravel()
+    x = x.ravel()
     ndim = len(x)
     idx = np.arange(0, ndim)
     up = 2 + 4 * idx / (ndim - 1)
     return np.sqrt(np.sum(np.abs(x) ** up))
 
 
+@njit
 def generate_diagonal_matrix(size, alpha=10):
     idx = np.arange(0, size)
     diagonal = alpha ** (idx / (2 * (size - 1)))
@@ -224,8 +265,9 @@ def generate_diagonal_matrix(size, alpha=10):
     return matrix
 
 
+@njit
 def gz_func(x):
-    x = np.array(x).ravel()
+    x = x.ravel()
     ndim = len(x)
     t1 = (500 - np.mod(x, 500)) * np.sin(np.sqrt(np.abs(500 - np.mod(x, 500)))) - (x - 500) ** 2 / (10000 * ndim)
     t2 = (np.mod(np.abs(x), 500) - 500) * np.sin(np.sqrt(np.abs(np.mod(np.abs(x), 500) - 500))) - (x + 500) ** 2 / (10000 * ndim)
@@ -236,18 +278,23 @@ def gz_func(x):
     return y
 
 
+@njit
 def katsuura_func(x):
-    x = np.array(x).ravel()
+    x = x.ravel()
     ndim = len(x)
     result = 1.0
     for idx in range(0, ndim):
-        temp = np.sum([np.abs(2 ** j * x[idx] - np.round(2 ** j * x[idx])) / 2 ** j for j in range(1, 33)])
+        # temp = np.sum([np.abs(2 ** j * x[idx] - np.round(2 ** j * x[idx])) / 2 ** j for j in range(1, 33)])
+        temp = 0.0
+        for j in range(1, 33):
+            temp += np.abs(2 ** j * x[idx] - np.round(2 ** j * x[idx])) / 2 ** j
         result *= (1 + (idx + 1) * temp) ** (10.0 / ndim ** 1.2)
     return (result - 1) * 10 / ndim ** 2
 
 
+@njit
 def lunacek_bi_rastrigin_func(x, miu0=2.5, d=1, shift=0.0):
-    x = np.array(x).ravel() + shift
+    x = x.ravel() + shift
     ndim = len(x)
     s = 1.0 - 1.0 / (2 * np.sqrt(ndim + 20) - 8.2)
     miu1 = -np.sqrt((miu0 ** 2 - d) / s)
@@ -258,6 +305,7 @@ def lunacek_bi_rastrigin_func(x, miu0=2.5, d=1, shift=0.0):
     return result
 
 
+@njit
 def calculate_weight(x, delta=1.):
     ndim = len(x)
     temp = np.sum(x ** 2)
@@ -269,11 +317,12 @@ def calculate_weight(x, delta=1.):
     return weight
 
 
+@njit
 def modified_schwefel_func(x):
     """
         This is a direct conversion of the CEC2021 C-Code for the Modified Schwefel F11 Function
     """
-    z = np.array(x).ravel() + 4.209687462275036e+002
+    z = x.ravel() + 4.209687462275036e+002
     nx = len(z)
 
     mask1 = z > 500
@@ -289,41 +338,46 @@ def modified_schwefel_func(x):
     return np.sum(fx) + 4.189828872724338e+002 * nx
 
 
+@njit
 def happy_cat_func(x, shift=0.0):
-    z = np.array(x).ravel() + shift
+    z = x.ravel() + shift
     ndim = len(z)
     t1 = np.sum(z)
     t2 = np.sum(z ** 2)
     return np.abs(t2 - ndim) ** 0.25 + (0.5 * t2 + t1) / ndim + 0.5
 
 
+@njit
 def hgbat_func(x, shift=0.0):
-    x = np.array(x).ravel() + shift
+    x = x.ravel() + shift
     ndim = len(x)
     t1 = np.sum(x)
     t2 = np.sum(x ** 2)
     return np.abs(t2 ** 2 - t1 ** 2) ** 0.5 + (0.5 * t2 + t1) / ndim + 0.5
 
 
+@njit
 def zakharov_func(x):
-    x = np.array(x).ravel()
+    x = x.ravel()
     temp = np.sum(0.5 * x)
     return np.sum(x ** 2) + temp ** 2 + temp ** 4
 
 
+@njit
 def levy_func(x, shift=0.0):
-    x = np.array(x).ravel() + shift
+    x = x.ravel() + shift
     w = 1. + (x - 1.) / 4
     t1 = np.sin(np.pi * w[0]) ** 2 + (w[-1] - 1) ** 2 * (1 + np.sin(2 * np.pi * w[-1]) ** 2)
     t2 = np.sum((w[:-1] - 1) ** 2 * (1 + 10 * np.sin(np.pi * w[:-1] + 1) ** 2))
     return t1 + t2
 
 
+@njit
 def expanded_schaffer_f6_func(x):
     """
     This is a direct conversion of the CEC2021 C-Code for the Expanded Schaffer F6 Function
     """
-    z = np.array(x).ravel()
+    z = x.ravel()
 
     temp1 = np.sin(np.sqrt(z[:-1] ** 2 + z[1:] ** 2))
     temp1 = temp1 ** 2
@@ -338,8 +392,9 @@ def expanded_schaffer_f6_func(x):
     return f
 
 
+@njit
 def schaffer_f7_func(x):
-    x = np.array(x).ravel()
+    x = x.ravel()
     ndim = len(x)
     result = 0.0
     for idx in range(0, ndim - 1):
@@ -348,12 +403,13 @@ def schaffer_f7_func(x):
     return (result / (ndim - 1)) ** 2
 
 
+@njit
 def chebyshev_func(x):
     """
     The following was converted from the cec2019 C code
     Storn's Tchebychev - a 2nd ICEO function - generalized version
     """
-    x = np.array(x).ravel()
+    x = x.ravel()
     ndim = len(x)
     sample = 32 * ndim
 
@@ -382,11 +438,12 @@ def chebyshev_func(x):
     return sum_val
 
 
+@njit
 def inverse_hilbert_func(x):
     """
     This is a direct conversion of the cec2019 C code for python optimized to use numpy
     """
-    x = np.array(x).ravel()
+    x = x.ravel()
     ndim = len(x)
     b = int(np.sqrt(ndim))
 
@@ -403,6 +460,7 @@ def inverse_hilbert_func(x):
     return result
 
 
+@njit
 def lennard_jones_func(x):
     """
     This version is a direct python conversion from the C-Code of CEC2019 implementation.
@@ -410,7 +468,7 @@ def lennard_jones_func(x):
     Valid for any dimension, D = 3 * k, k = 2, 3, 4, ..., 25.
     k is the number of atoms in 3-D space.
     """
-    x = np.array(x).ravel()
+    x = x.ravel()
     ndim = len(x)
     # Minima values from Cambridge cluster database: http://www-wales.ch.cam.ac.uk/~jon/structures/LJ/tables.150.html
     minima = np.array([-1., -3., -6., -9.103852, -12.712062, -16.505384, -19.821489, -24.113360,
